@@ -1,0 +1,15 @@
+{
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -k -n backend,frontend -c cyan,magenta \"npm --prefix Backend run dev\" \"npm --prefix frontend run dev\"",
+    "dev:db": "docker compose -f ./docker-compose.yml up -d mongo",
+    "stop:db": "docker compose -f ./docker-compose.yml stop mongo"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  }
+}
