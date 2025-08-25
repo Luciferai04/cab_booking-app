@@ -164,7 +164,21 @@ It will register a user and a captain, log both in, get fare estimates, create/c
 
 - Jaeger UI: http://localhost:16686
 - Most services emit OpenTelemetry spans to Jaeger (OTLP HTTP).
-- Some services expose Prometheus-style metrics at /metrics.
+- Prometheus: http://localhost:9090 (scrapes users-service, captains-service, rides-service; plus Redis via redis-exporter).
+- Grafana: http://localhost:3000 (admin/admin).
+- Provisioned dashboards: Uber Video Overview, Service Latency & Errors & Redis.
+
+Grafana navigation
+- Login admin/admin → Dashboards → Browse → select a dashboard.
+- Optional screenshots can be added under docs/observability/ and referenced from README.
+
+Generate demo traffic (optional)
+- Run from repo root once services are running:
+
+```
+for i in $(seq 1 50); do curl -fsS http://localhost:8080/health >/dev/null || true; sleep 0.2; done
+node ./test-e2e-microservices.js || true
+```
 
 ---
 

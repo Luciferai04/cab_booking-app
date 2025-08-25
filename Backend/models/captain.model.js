@@ -72,6 +72,17 @@ const captainSchema = new mongoose.Schema({
     }
 })
 
+// Ensure sensitive/internal fields are never serialized
+function sanitize(ret) {
+    ret.id = ret._id;
+    delete ret._id;
+    delete ret.__v;
+    delete ret.password;
+    return ret;
+}
+captainSchema.set('toJSON', { transform: (doc, ret) => sanitize(ret) });
+captainSchema.set('toObject', { transform: (doc, ret) => sanitize(ret) });
+
 // 2dsphere index for geo queries
 captainSchema.index({ location: '2dsphere' });
 

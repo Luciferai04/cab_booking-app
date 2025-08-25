@@ -6,7 +6,8 @@ ENV NODE_ENV=production
 
 # Install dependencies first (better layer caching)
 COPY Backend/package*.json ./
-RUN npm ci --omit=dev
+# Use npm install to avoid lockfile mismatch when dependencies update
+RUN npm install --omit=dev --no-audit --no-fund
 
 # Copy app source
 COPY Backend/ ./

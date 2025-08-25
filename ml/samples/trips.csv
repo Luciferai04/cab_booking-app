@@ -1,0 +1,7 @@
+# Minimal ML samples and training stubs
+
+# Example trips schema CSV
+trip_id,pickup_ts,pickup_zone,drop_zone,osrm_duration,osrm_distance,actual_duration,actual_distance,vehicle_type
+1,2025-08-24T08:15:00Z,zone_12,zone_34,600,4500,720,4600,car
+2,2025-08-24T09:05:00Z,zone_11,zone_32,540,4200,570,4300,auto
+

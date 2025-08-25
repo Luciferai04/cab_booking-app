@@ -5,6 +5,8 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
+const { randomUUID } = require('crypto');
+const mongoose = require('mongoose');
 const app = express();
 const cookieParser = require('cookie-parser');
 const connectToDb = require('./db/db');
@@ -18,9 +20,29 @@ connectToDb();
 // trust proxy for secure cookies behind reverse proxy
 app.set('trust proxy', 1);
 
-// Logging
+// Correlation IDs for tracing across services
+app.use((req, res, next) => {
+    const cid = req.headers['x-correlation-id'] || randomUUID();
+    req.correlationId = cid;
+    res.setHeader('x-correlation-id', cid);
+    next();
+});
+
+// Logging (JSON with correlation id); disabled in test
 if (process.env.NODE_ENV !== 'test') {
-    app.use(morgan('combined'));
+    const serviceName = process.env.SERVICE_NAME || 'backend';
+    app.use(morgan((tokens, req, res) => JSON.stringify({
+        service: serviceName,
+        time: tokens.date(req, res, 'iso'),
+        correlationId: req.correlationId,
+        method: tokens.method(req, res),
+        url: tokens.url(req, res),
+        status: Number(tokens.status(req, res)),
+        responseTimeMs: Number(tokens['response-time'](req, res)),
+        contentLength: tokens.res(req, res, 'content-length'),
+        userAgent: req.headers['user-agent'],
+        remoteAddr: tokens['remote-addr'](req, res)
+    })));
 }
 
 // Security headers
@@ -31,7 +53,7 @@ const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200, standardHeaders:
 app.use(limiter);
 
 // Configurable CORS for production safety
-const allowedOrigins = (process.env.CORS_ORIGIN || '*')
+const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173,http://localhost:8080')
     .split(',')
     .map(s => s.trim())
     .filter(Boolean);
@@ -57,9 +79,18 @@ app.get('/', (req, res) => {
     res.send('Hello World');
 });
 
-// Liveness/Readiness probe
+// Liveness probe
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'ok', uptime: process.uptime(), timestamp: Date.now() });
+});
+
+// Readiness probe - checks DB connectivity
+app.get('/ready', (req, res) => {
+    const state = mongoose.connection.readyState; // 1=connected
+    if (state === 1) {
+        return res.status(200).json({ status: 'ready', db: 'connected' });
+    }
+    res.status(503).json({ status: 'not_ready', dbState: state });
 });
 
 app.use('/users', userRoutes);

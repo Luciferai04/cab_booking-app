@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+**/.DS_Store
+._*
+**/._*
+
+# Node
+node_modules
+npm-debug.log*
+yarn-error.log*
+
+# Env
+.env
+**/.env
+*.local

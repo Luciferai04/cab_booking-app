@@ -27,7 +27,6 @@ The request body should be in JSON format and include the following fields:
     - `firstname` (string): User's first name (minimum 3 characters).
     - `lastname` (string): User's last name (minimum 3 characters).   
   - `email` (string): User's email address (must be a valid email).
-  - `password` (string): User's password (minimum 6 characters).
 - `token` (String): JWT Token
 
 ## `/users/login` Endpoint
@@ -58,7 +57,6 @@ The request body should be in JSON format and include the following fields:
     - `firstname` (string): User's first name (minimum 3 characters).
     - `lastname` (string): User's last name (minimum 3 characters).   
   - `email` (string): User's email address (must be a valid email).
-  - `password` (string): User's password (minimum 6 characters).
 - `token` (String): JWT Token
 
 ## `/users/profile` Endpoint
@@ -166,7 +164,6 @@ The request body should be in JSON format and include the following fields:
     - `firstname` (string): Captain's first name (minimum 3 characters).
     - `lastname` (string): Captain's last name (minimum 3 characters).   
   - `email` (string): Captain's email address (must be a valid email).
-  - `password` (string): Captain's password (minimum 6 characters).
   - `vehicle` (object):
     - `color` (string): Vehicle color.
     - `plate` (string): Vehicle plate number.
@@ -202,7 +199,6 @@ The request body should be in JSON format and include the following fields:
     - `firstname` (string): Captain's first name (minimum 3 characters).
     - `lastname` (string): Captain's last name (minimum 3 characters).   
   - `email` (string): Captain's email address (must be a valid email).
-  - `password` (string): Captain's password (minimum 6 characters).
   - `vehicle` (object):
     - `color` (string): Vehicle color.
     - `plate` (string): Vehicle plate number.

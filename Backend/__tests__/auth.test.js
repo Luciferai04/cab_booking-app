@@ -27,6 +27,8 @@ test('user register, login, profile, logout flow', async () => {
     .post('/users/register')
     .send({ fullname: { firstname: 'Test', lastname: 'User' }, email, password: 'secret123' });
   expect(register.status).toBe(201);
+  expect(register.body.user).toBeDefined();
+  expect(register.body.user.password).toBeUndefined();
 
   const login = await request(app)
     .post('/users/login')
@@ -39,6 +41,7 @@ test('user register, login, profile, logout flow', async () => {
     .get('/users/profile')
     .set('Cookie', cookie);
   expect(profile.status).toBe(200);
+  expect(profile.body.password).toBeUndefined();
 
   const logout = await request(app)
     .get('/users/logout')

@@ -6,6 +6,8 @@ The stack runs entirely with Docker Compose and exposes:
 - API Gateway (Nginx) on http://localhost:8080 and https://localhost:8443
 - Frontend (static) on http://localhost:5173
 - Jaeger UI on http://localhost:16686
+- Prometheus on http://localhost:9090
+- Grafana on http://localhost:3000 (admin/admin)
 
 Key technologies:
 - Node.js + Express for most microservices
@@ -100,7 +102,30 @@ Key technologies:
 10) Observability
 - All Node services export traces to Jaeger (OTLP HTTP at jaeger:4318).
 - Jaeger UI shows spans and service dependency graph.
-- Users/Captains include /metrics for Prometheus-style metrics.
+- Prometheus scrapes service metrics from users-service (:4003), captains-service (:4004), and rides-service (:4005) at /metrics.
+- Redis metrics are exposed via redis-exporter (:9121) and scraped by Prometheus (job: redis).
+- Grafana is pre-provisioned with Prometheus and Loki data sources and dashboards in observability/grafana/dashboards:
+  - Uber Video Overview: latency and logs overview.
+  - Service Latency & Errors & Redis: route latency (p50/p95), error rate, and Redis ops/sec.
+- Grafana UI: http://localhost:3000 (admin/admin). Prometheus UI: http://localhost:9090.
+
+Grafana quick navigation
+- Sign in: admin/admin (change after first login if desired).
+- Dashboards: Home → Dashboards → Browse → Uber Video Overview, Service Latency & Errors & Redis.
+- Example views (place screenshots under docs/observability/):
+  - docs/observability/grafana-overview.png
+  - docs/observability/grafana-service-metrics.png
+
+Generate demo traffic (optional)
+- Run this from repo root after the stack is up to populate traces and metrics:
+
+```
+# Hit gateway health repeatedly
+for i in $(seq 1 50); do curl -fsS http://localhost:8080/health >/dev/null || true; sleep 0.2; done
+
+# Exercise a subset of the E2E flow quickly
+node ./test-e2e-microservices.js || true
+```
 
 ---
 

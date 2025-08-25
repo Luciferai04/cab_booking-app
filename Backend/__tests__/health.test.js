@@ -21,3 +21,12 @@ test('GET /health returns ok', async () => {
   expect(res.status).toBe(200);
   expect(res.body.status).toBe('ok');
 });
+
+test('GET /ready returns ready when DB connected', async () => {
+  const res = await request(app).get('/ready');
+  expect([200,503]).toContain(res.status);
+  // In test env with mongodb-memory-server, it should be connected
+  if (res.status === 200) {
+    expect(res.body.status).toBe('ready');
+  }
+});

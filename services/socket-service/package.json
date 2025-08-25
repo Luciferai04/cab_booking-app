@@ -1,0 +1,22 @@
+{
+  "name": "socket-service",
+  "version": "1.0.0",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+"@opentelemetry/auto-instrumentations-node": "0.53.0",
+"@opentelemetry/exporter-trace-otlp-http": "0.53.0",
+"@opentelemetry/sdk-node": "0.53.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.1",
+    "helmet": "^7.2.0",
+    "socket.io": "^4.8.1",
+    "ioredis": "^5.4.1",
+    "pino-http": "^10.3.0",
+    "prom-client": "^15.1.3"
+  }
+}
+
