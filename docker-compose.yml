@@ -32,6 +32,7 @@ services:
     depends_on:
       - routing-service
       - ml-inference-service
+      - redis
 
   socket-service:
     build:
@@ -85,10 +86,12 @@ services:
       - PORT=4003
       - DB_CONNECT=${DB_CONNECT:-mongodb://mongo:27017/uber-video?directConnection=true}
       - JWT_SECRET=${JWT_SECRET}
+      - REDIS_URL=redis://redis:6379
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
       - OTEL_SERVICE_NAME=users-service
     depends_on:
       - jaeger
+      - redis
     networks:
       - internal
 
@@ -100,10 +103,12 @@ services:
       - PORT=4004
       - DB_CONNECT=${DB_CONNECT:-mongodb://mongo:27017/uber-video?directConnection=true}
       - JWT_SECRET=${JWT_SECRET}
+      - REDIS_URL=redis://redis:6379
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
       - OTEL_SERVICE_NAME=captains-service
     depends_on:
       - jaeger
+      - redis
     networks:
       - internal
 
