@@ -138,31 +138,31 @@ flowchart LR
     end
 
     subgraph Frontend
-      FE[Static Frontend (Nginx)\n:5173]
+      FE[Static Frontend (Nginx)<br/>:5173]
     end
 
     subgraph Gateway
-      GW[Nginx API Gateway\n80/443]
+      GW[Nginx API Gateway<br/>80/443]
     end
 
     subgraph Core Services
-      US[users-service\n:4003]
-      CS[captains-service\n:4004]
-      RS[rides-service\n:4005]
-      MS[maps-service\n:4001]
-      SO[socket-service\n:4002]
-      PAY[payments-service\n:4006]
-      ROUT[routing-service\n:4010]
-      ML[ml-inference-service\n:8000]
-      BE[backend\n:3000]
+      US[users-service<br/>:4003]
+      CS[captains-service<br/>:4004]
+      RS[rides-service<br/>:4005]
+      MS[maps-service<br/>:4001]
+      SO[socket-service<br/>:4002]
+      PAY[payments-service<br/>:4006]
+      ROUT[routing-service<br/>:4010]
+      ML[ml-inference-service<br/>:8000]
+      BE[backend<br/>:3000]
       DISP[dispatcher-worker]
     end
 
     subgraph Infra
-      JAEGER[Jaeger all-in-one\n:16686/:4318]
-      REDIS[(Redis\n:6379)]
-      MONGO[(MongoDB\n:27017)]
-      OSRM[osrm-service\n:5000]
+      JAEGER[Jaeger all-in-one<br/>:16686/:4318]
+      REDIS[(Redis<br/>:6379)]
+      MONGO[(MongoDB<br/>:27017)]
+      OSRM[osrm-service<br/>:5000]
     end
 
     U --> FE
