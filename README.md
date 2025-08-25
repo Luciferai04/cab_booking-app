@@ -104,6 +104,179 @@ Key technologies:
 
 ---
 
+## System Architecture
+
+```mermaid
+flowchart LR
+    subgraph Client
+      U[User/Browser]
+    end
+
+    subgraph Frontend
+      FE[Static Frontend (Nginx)\n:5173]
+    end
+
+    subgraph Gateway
+      GW[Nginx API Gateway\n80/443]
+    end
+
+    subgraph Core Services
+      US[users-service\n:4003]
+      CS[captains-service\n:4004]
+      RS[rides-service\n:4005]
+      MS[maps-service\n:4001]
+      SO[socket-service\n:4002]
+      PAY[payments-service\n:4006]
+      ROUT[routing-service\n:4010]
+      ML[ml-inference-service\n:8000]
+      BE[backend\n:3000]
+      DISP[dispatcher-worker]
+    end
+
+    subgraph Infra
+      JAEGER[Jaeger all-in-one\n:16686/:4318]
+      REDIS[(Redis\n:6379)]
+      MONGO[(MongoDB\n:27017)]
+      OSRM[osrm-service\n:5000]
+    end
+
+    U --> FE
+    FE -->|VITE_BASE_URL| GW
+    U -->|Direct Dev Calls| GW
+
+    GW --> US
+    GW --> CS
+    GW --> RS
+    GW --> MS
+    GW --> SO
+    GW --> PAY
+    GW --> ROUT
+    GW --> ML
+    GW --> BE
+
+    US <---> MONGO
+    CS <---> MONGO
+    RS <---> MONGO
+    BE <---> MONGO
+
+    SO <---> REDIS
+    DISP <---> REDIS
+
+    MS --> ROUT
+    ROUT --> OSRM
+    MS --> ML
+
+    US -. OTLP .-> JAEGER
+    CS -. OTLP .-> JAEGER
+    RS -. OTLP .-> JAEGER
+    MS -. OTLP .-> JAEGER
+    SO -. OTLP .-> JAEGER
+    PAY -. OTLP .-> JAEGER
+    ROUT -. OTLP .-> JAEGER
+    BE -. OTLP .-> JAEGER
+    DISP -. OTLP .-> JAEGER
+```
+
+## End-to-End Booking Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Client as Client/Frontend
+    participant GW as Nginx Gateway
+    participant US as users-service
+    participant CS as captains-service
+    participant RS as rides-service
+    participant MS as maps-service
+    participant ROUT as routing-service
+    participant OSRM as osrm-service
+    participant ML as ml-inference
+    participant SO as socket-service
+    participant PAY as payments-service
+    participant REDIS as Redis
+    participant MONGO as MongoDB
+    participant J as Jaeger (OTLP)
+
+    Client->>GW: GET /health
+    GW-->>Client: 200 ok
+
+    Client->>GW: POST /users/register
+    GW->>US: /register
+    US->>MONGO: insert user
+    US-->>Client: 201 {token, user}
+
+    Client->>GW: POST /captains/register
+    GW->>CS: /register
+    CS->>MONGO: insert captain
+    CS-->>Client: 201 {token, captain}
+
+    Client->>GW: GET /rides/get-fare?pickup&destination
+    GW->>RS: /get-fare
+    RS->>MS: pricing/eta request
+    MS->>ROUT: ETA request
+    ROUT->>OSRM: /table
+    OSRM-->>ROUT: durations
+    MS->>ML: adjust ETA/model
+    ML-->>MS: eta correction
+    MS-->>RS: fares (with surge)
+    RS-->>Client: {auto, car, moto, surge}
+
+    Client->>GW: POST /rides/create
+    GW->>RS: create
+    RS->>MONGO: create ride
+    RS->>SO: publish events
+    SO->>REDIS: pub/sub
+    RS-->>Client: 201 {ride, otp}
+
+    Client->>GW: POST /rides/confirm (captain)
+    GW->>RS: confirm
+    RS->>MONGO: update ride->accepted
+    RS-->>Client: 200
+
+    Client->>GW: GET /rides/start-ride?rideId&otp
+    GW->>RS: start
+    RS->>MONGO: update ride->ongoing
+    RS-->>Client: 200
+
+    Client->>GW: POST /rides/end-ride
+    GW->>RS: end
+    RS->>MONGO: update ride->completed
+    RS-->>Client: 200 {fare}
+
+    Client->>GW: POST /payments/create-intent
+    GW->>PAY: create-intent (stub)
+    PAY-->>Client: {id, status}
+
+    note over US,DISP: All services emit OTLP traces to Jaeger
+```
+
+## Technical Innovations and Design Choices
+
+- Local TLS with HTTP/2
+  - Gateway terminates TLS using local self-signed certs mounted via Compose.
+  - Upgraded deprecated `listen 443 ssl http2;` to `listen 443 ssl;` + `http2 on;`.
+- Safe, repeatable DX on macOS
+  - Eliminated macOS AppleDouble/extended-attribute issues in build contexts.
+  - Symlink or nospaces working copy to avoid Docker Desktop bind-mount quirks.
+- Resilient routing via Docker DNS with request-time resolution
+  - Nginx `resolver 127.0.0.11 valid=30s` and `proxy_pass http://$var` pattern reduce stale DNS issues during container restarts.
+- End-to-end observability by default
+  - OpenTelemetry SDK in each Node service exports to Jaeger (OTLP HTTP).
+  - Correlation IDs: gateway and services propagate `X-Correlation-Id` per request.
+- Security-hardening in services
+  - Helmet default headers, secure cookies, configurable CORS allowlist.
+  - JWT with exp and blacklist collection (TTL index via `expires`) to invalidate tokens post-logout.
+  - Rate limiting at gateway and express-rate-limit for auth endpoints.
+- Operational hygiene
+  - Graceful shutdown hooks (SIGTERM/SIGINT) close servers and DB connections.
+  - Prometheus metrics (prom-client) with route-level latency histograms.
+- Geo+ML integration pattern
+  - Maps orchestrates OSRM travel times and ML ETA correction, parameterized surge model.
+- Developer productivity
+  - Makefile targets for TLS, build/up, smoke, E2E, Jaeger, and OSRM workflows.
+
+---
+
 ## Setup
 
 Prerequisites
