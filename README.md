@@ -164,55 +164,55 @@ node ./test-e2e-microservices.js || true
 flowchart TB
     subgraph "Production Infrastructure"
         subgraph "External Services"
-            GMAPS["Google Maps API<br/>Geocoding & Routing"]
-            STRIPE["Stripe API<br/>Payments"]
-            TWILIO["Twilio<br/>SMS Notifications"]
-            SENDGRID["SendGrid<br/>Email Service"]
-            FCM["Firebase<br/>Push Notifications"]
+            GMAPS[Google Maps API - Geocoding and Routing]
+            STRIPE[Stripe API - Payments]
+            TWILIO[Twilio - SMS Notifications]
+            SENDGRID[SendGrid - Email Service]
+            FCM[Firebase - Push Notifications]
         end
         
         subgraph "Load Balancer & CDN"
-            LB["Load Balancer<br/>SSL Termination"]
-            CDN["CDN<br/>Static Assets"]
+            LB[Load Balancer - SSL Termination]
+            CDN[CDN - Static Assets]
         end
         
         subgraph "API Gateway & Auth"
-            GATEWAY["Nginx Gateway<br/>Rate Limiting"]
-            AUTH["OAuth2 Service<br/>JWT & Sessions"]
+            GATEWAY[Nginx Gateway - Rate Limiting]
+            AUTH[OAuth2 Service - JWT and Sessions]
         end
         
         subgraph "Core Business Services"
-            USER["Users Service<br/>Profiles & Auth"]
-            CAPTAIN["Captains Service<br/>Driver Management"]
-            RIDE["Rides Service<br/>Booking Logic"]
-            ALLOC["Allocation Service<br/>Driver Matching"]
-            NOTIFY["Notification Service<br/>Multi-channel"]
+            USER[Users Service - Profiles and Auth]
+            CAPTAIN[Captains Service - Driver Management]
+            RIDE[Rides Service - Booking Logic]
+            ALLOC[Allocation Service - Driver Matching]
+            NOTIFY[Notification Service - Multi-channel]
         end
         
         subgraph "Platform Services"
-            MAPS["Maps Service<br/>GPS & Routing"]
-            PAYMENTS["Payments Service<br/>Stripe Integration"]
-            SOCKET["Socket Service<br/>Real-time Updates"]
-            ML["ML Service<br/>ETA Prediction"]
+            MAPS[Maps Service - GPS and Routing]
+            PAYMENTS[Payments Service - Stripe Integration]
+            SOCKET[Socket Service - Real-time Updates]
+            ML[ML Service - ETA Prediction]
         end
         
         subgraph "Data Layer"
-            MONGO[("MongoDB Atlas<br/>Primary Database")]
-            REDIS[("Redis Cloud<br/>Cache & Sessions")]
-            S3[("S3<br/>File Storage")]
+            MONGO[MongoDB Atlas - Primary Database]
+            REDIS[Redis Cloud - Cache and Sessions]
+            S3[S3 - File Storage]
         end
         
         subgraph "Observability"
-            PROM["Prometheus<br/>Metrics"]
-            GRAF["Grafana<br/>Dashboards"]
-            JAEGER["Jaeger<br/>Tracing"]
-            LOKI["Loki<br/>Logging"]
+            PROM[Prometheus - Metrics]
+            GRAF[Grafana - Dashboards]
+            JAEGER[Jaeger - Tracing]
+            LOKI[Loki - Logging]
         end
         
         subgraph "CI/CD & Security"
-            GHA["GitHub Actions<br/>CI/CD Pipeline"]
-            VAULT["Secrets Manager<br/>Environment Vars"]
-            SCAN["Security Scanner<br/>SAST/DAST"]
+            GHA[GitHub Actions - CI/CD Pipeline]
+            VAULT[Secrets Manager - Environment Vars]
+            SCAN[Security Scanner - SAST/DAST]
         end
     end
     
