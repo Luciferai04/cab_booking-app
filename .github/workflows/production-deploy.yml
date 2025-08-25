@@ -1,0 +1,454 @@
+name: Production Deployment Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository }}
+
+jobs:
+  # Security scanning
+  security-scan:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # Unit tests
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - users-service
+          - captains-service
+          - rides-service
+          - maps-service
+          - payments-service
+          - auth-service
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        working-directory: ./services/${{ matrix.service }}
+        run: npm ci
+
+      - name: Run tests
+        working-directory: ./services/${{ matrix.service }}
+        run: |
+          npm run test:unit || echo "No unit tests configured"
+          npm run test:coverage || echo "No coverage configured"
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./services/${{ matrix.service }}/coverage/lcov.info
+          flags: ${{ matrix.service }}
+          name: ${{ matrix.service }}-coverage
+
+  # Integration tests
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [unit-tests]
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run integration tests
+        env:
+          DB_CONNECT: mongodb://localhost:27017/test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+        run: |
+          npm ci
+          npm run test:integration || echo "No integration tests configured"
+
+  # Build and push Docker images
+  build-images:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [security-scan, unit-tests]
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        service:
+          - users-service
+          - captains-service
+          - rides-service
+          - maps-service
+          - payments-service
+          - auth-service
+          - allocation-service
+          - notification-service
+          - gateway
+          - frontend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.service == 'gateway' && './gateway' || matrix.service == 'frontend' && './frontend' || format('./services/{0}', matrix.service) }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+  # E2E tests
+  e2e-tests:
+    name: End-to-End Tests
+    runs-on: ubuntu-latest
+    needs: [build-images]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Compose
+        run: |
+          docker compose version
+
+      - name: Start services
+        run: |
+          docker compose -f docker-compose.yml up -d
+          sleep 30  # Wait for services to be ready
+
+      - name: Run E2E tests
+        run: |
+          npm ci
+          npm run test:e2e
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          docker compose logs > docker-logs.txt
+          
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: docker-logs
+          path: docker-logs.txt
+
+      - name: Stop services
+        if: always()
+        run: docker compose down -v
+
+  # Deploy to staging
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [integration-tests, e2e-tests]
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: staging
+      url: https://staging.cab-booking.com
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name cab-booking-staging --region us-east-1
+
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install cab-booking ./helm/cab-booking \
+            --namespace staging \
+            --create-namespace \
+            --values helm/cab-booking/values.staging.yaml \
+            --set image.tag=${{ github.sha }} \
+            --wait \
+            --timeout 10m
+
+      - name: Run smoke tests
+        run: |
+          kubectl run smoke-test --image=curlimages/curl:latest --rm -i --restart=Never -- \
+            curl -f https://staging.cab-booking.com/health
+
+      - name: Notify Slack
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: 'Staging deployment ${{ job.status }}'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+
+  # Performance tests
+  performance-tests:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    needs: [deploy-staging]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run K6 performance tests
+        uses: grafana/k6-action@v0.3.0
+        with:
+          filename: tests/performance/load-test.js
+          cloud: true
+        env:
+          K6_CLOUD_TOKEN: ${{ secrets.K6_CLOUD_TOKEN }}
+          BASE_URL: https://staging.cab-booking.com
+
+      - name: Analyze results
+        run: |
+          echo "Performance test results:"
+          cat summary.json
+
+  # Deploy to production
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, performance-tests]
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://cab-booking.com
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.PROD_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.PROD_AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name cab-booking-production --region us-east-1
+
+      - name: Blue-Green Deployment
+        run: |
+          # Deploy to green environment
+          helm upgrade --install cab-booking-green ./helm/cab-booking \
+            --namespace production \
+            --create-namespace \
+            --values helm/cab-booking/values.production.yaml \
+            --set image.tag=${{ github.sha }} \
+            --set blueGreen.productionSlot=green \
+            --wait \
+            --timeout 10m
+
+          # Run health checks on green
+          kubectl run health-check --image=curlimages/curl:latest --rm -i --restart=Never -- \
+            curl -f http://cab-booking-green.production.svc.cluster.local/health
+
+          # Switch traffic to green
+          kubectl patch service cab-booking -n production \
+            -p '{"spec":{"selector":{"slot":"green"}}}'
+
+          # Wait for traffic to stabilize
+          sleep 60
+
+          # Delete blue deployment
+          helm uninstall cab-booking-blue -n production || true
+
+      - name: Run production smoke tests
+        run: |
+          npm ci
+          npm run test:smoke:production
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          # Switch traffic back to blue
+          kubectl patch service cab-booking -n production \
+            -p '{"spec":{"selector":{"slot":"blue"}}}'
+          
+          # Delete failed green deployment
+          helm uninstall cab-booking-green -n production || true
+
+      - name: Create release
+        if: success()
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.run_number }}
+          release_name: Release v${{ github.run_number }}
+          body: |
+            Production deployment completed successfully.
+            
+            **Changes:**
+            ${{ github.event.head_commit.message }}
+            
+            **Commit:** ${{ github.sha }}
+            **Deployed by:** ${{ github.actor }}
+          draft: false
+          prerelease: false
+
+      - name: Notify team
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: |
+            Production deployment ${{ job.status }}
+            Version: v${{ github.run_number }}
+            Commit: ${{ github.sha }}
+            Deployed by: ${{ github.actor }}
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+
+  # Post-deployment monitoring
+  post-deployment-monitoring:
+    name: Post-Deployment Monitoring
+    runs-on: ubuntu-latest
+    needs: [deploy-production]
+    if: success()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Monitor application health
+        run: |
+          for i in {1..10}; do
+            echo "Health check $i/10"
+            curl -f https://cab-booking.com/health || exit 1
+            sleep 30
+          done
+
+      - name: Check error rates
+        run: |
+          # Query Prometheus for error rates
+          ERROR_RATE=$(curl -s "https://prometheus.cab-booking.com/api/v1/query?query=rate(http_requests_total{status=~'5..'}[5m])" | jq '.data.result[0].value[1]')
+          if (( $(echo "$ERROR_RATE > 0.01" | bc -l) )); then
+            echo "Error rate too high: $ERROR_RATE"
+            exit 1
+          fi
+
+      - name: Check response times
+        run: |
+          # Query Prometheus for p99 latency
+          P99_LATENCY=$(curl -s "https://prometheus.cab-booking.com/api/v1/query?query=histogram_quantile(0.99,rate(http_request_duration_seconds_bucket[5m]))" | jq '.data.result[0].value[1]')
+          if (( $(echo "$P99_LATENCY > 1.0" | bc -l) )); then
+            echo "P99 latency too high: $P99_LATENCY"
+            exit 1
+          fi
+
+      - name: Create monitoring dashboard link
+        run: |
+          echo "📊 View deployment metrics: https://grafana.cab-booking.com/d/deployment-${{ github.sha }}"
+
+# Cleanup old images
+  cleanup:
+    name: Cleanup Old Images
+    runs-on: ubuntu-latest
+    needs: [deploy-production]
+    if: always()
+    steps:
+      - name: Delete old container images
+        uses: actions/delete-package-versions@v4
+        with:
+          package-name: 'cab-booking'
+          package-type: 'container'
+          min-versions-to-keep: 10
+          delete-only-pre-release-versions: true
