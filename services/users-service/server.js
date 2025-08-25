@@ -12,6 +12,7 @@ const pinoHttp = require('pino-http');
 const client = require('prom-client');
 const { randomUUID, randomInt } = require('crypto');
 const Redis = require('ioredis');
+const axios = require('axios');
 
 const app = express();
 app.use(helmet());
@@ -67,6 +68,7 @@ function genToken(id) {
 
 let redis = null;
 if (process.env.REDIS_URL) { try { redis = new Redis(process.env.REDIS_URL); } catch(_) { redis = null; } }
+const NOTIFICATION_BASE_URL = process.env.NOTIFICATION_BASE_URL || 'http://notification-service:4008';
 
 function genRefreshToken() {
   return randomUUID();
@@ -195,12 +197,24 @@ app.post('/otp/request', authLimiter, [
     const key = `otp:users:${ident}`;
     await redis.setex(key, 300, otp); // 5 minutes TTL
 
-    // In production, call notification-service here
-    // For now, log to server (and optionally return masked destination)
+    // Try to send via notification-service (best-effort)
+    try {
+      if (email) {
+        await axios.post(`${NOTIFICATION_BASE_URL}/send-otp`, { toEmail: email, otp, purpose: 'login' }, { timeout: 2000 });
+      } else if (phone) {
+        await axios.post(`${NOTIFICATION_BASE_URL}/send-otp`, { toPhone: phone, otp, purpose: 'login' }, { timeout: 2000 });
+      }
+    } catch (_) {
+      // ignore delivery errors in request endpoint
+    }
+
+    // Log and return masked address; include devOtp in non-production for local testing
     req.log?.info?.({ ident, otp }, 'OTP generated');
 
     otpRequests.inc({ channel, result: 'ok' });
-    return res.json({ sent: true, channel, to: email ? maskEmail(email) : maskPhone(phone) });
+    const payload = { sent: true, channel, to: email ? maskEmail(email) : maskPhone(phone) };
+    if (process.env.NODE_ENV !== 'production') payload.devOtp = otp;
+    return res.json(payload);
   } catch (e) {
     otpRequests.inc({ channel: 'unknown', result: 'error' });
     return res.status(500).json({ message: 'failed' });

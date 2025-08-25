@@ -426,7 +426,9 @@ app.post('/booking/otp/request', async (req, res) => {
     await redisPub.setex(k, 300, otp); // 5 minutes
     req.log?.info?.({ userId: decoded._id, otp }, 'booking OTP generated');
     bookingOtpRequests.inc({ result: 'ok' });
-    return res.json({ sent: true });
+    const payload = { sent: true };
+    if (process.env.NODE_ENV !== 'production') payload.devOtp = otp;
+    return res.json(payload);
   } catch (e) {
     bookingOtpRequests.inc({ result: 'error' });
     return res.status(500).json({ message: 'failed' });

@@ -772,6 +772,37 @@ class NotificationService {
 const notificationService = new NotificationService();
 
 // API endpoints
+
+// Ad-hoc OTP sender for email or SMS
+app.post('/send-otp', async (req, res) => {
+  try {
+    const { toEmail, toPhone, otp, purpose = 'verification' } = req.body || {};
+    if (!otp || (!toEmail && !toPhone)) return res.status(400).json({ message: 'otp and toEmail/toPhone required' });
+
+    if (toPhone && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER) {
+      await twilioClient.messages.create({
+        body: `Your ${purpose} code is ${otp}. It expires in 5 minutes.`,
+        from: process.env.TWILIO_PHONE_NUMBER,
+        to: toPhone
+      });
+    }
+
+    if (toEmail && process.env.SENDGRID_API_KEY && process.env.SENDGRID_FROM_EMAIL) {
+      await sgMail.send({
+        to: toEmail,
+        from: process.env.SENDGRID_FROM_EMAIL,
+        subject: 'Your verification code',
+        html: `<h2>Your verification code: ${otp}</h2><p>This code expires in 5 minutes.</p>`
+      });
+    }
+
+    return res.json({ sent: true });
+  } catch (error) {
+    logger.error('send-otp failed', error);
+    return res.status(500).json({ message: 'failed' });
+  }
+});
+
 app.post('/send', async (req, res) => {
   try {
     const { userId, template, data, options } = req.body;

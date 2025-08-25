@@ -600,6 +600,24 @@ kubectl get pods -n uber-video
 kubectl get services -n uber-video
 ```
 
+### OTP and UPI Usage Examples
+
+- Users OTP (login/2FA)
+  - Request: POST /users/otp/request { email: "john@example.com" }
+  - Verify: POST /users/otp/verify { email: "john@example.com", otp: "123456" }
+  - In non-production, the request response includes devOtp for local testing.
+
+- Booking OTP (optional)
+  - Enable by setting REQUIRE_BOOKING_OTP=true (default already enabled in docker-compose)
+  - Request: POST /rides/booking/otp/request (requires auth)
+  - Create ride: POST /rides/create { pickup, destination, vehicleType, bookingOtp }
+  - In non-production, the request response includes devOtp for local testing.
+
+- UPI Payments
+  - Create order/intent: POST /payments/upi/create-order { amount: 5000, currency: "INR", rideId }
+  - QR code: POST /payments/upi/qrcode { amount: 5000, currency: "INR", note: "Ride Payment", rideId }
+  - Verify: POST /payments/upi/verify { razorpay_order_id, razorpay_payment_id, razorpay_signature } (if using Razorpay)
+
 ### Frontend Deployment (Vercel)
 
 **Via GitHub Integration:**

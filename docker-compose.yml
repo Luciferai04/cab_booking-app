@@ -124,6 +124,7 @@ services:
       - SOCKET_BASE_URL=http://socket-service:4002
       - REDIS_URL=redis://redis:6379
       - ML_BASE_URL=http://ml-inference-service:8000
+      - REQUIRE_BOOKING_OTP=true
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
       - OTEL_SERVICE_NAME=rides-service
     depends_on:
@@ -262,6 +263,7 @@ services:
       - rides-service
       - payments-service
       - routing-service
+      - notification-service
     ports:
       - "8080:80"
       - "8443:443"
@@ -278,6 +280,8 @@ services:
       - PORT=4006
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
       - OTEL_SERVICE_NAME=payments-service
+      - UPI_VPA=${UPI_VPA:-test@upi}
+      - UPI_PAYER_NAME=${UPI_PAYER_NAME:-Cab Booking}
     depends_on:
       - jaeger
     networks:
@@ -295,6 +299,26 @@ services:
       - "5173:80"
     depends_on:
       - gateway
+    networks:
+      - internal
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+    container_name: uber-video-notification
+    environment:
+      - PORT=4008
+      - DB_CONNECT=mongodb://mongo:27017/notifications?directConnection=true
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
+      - SENDGRID_FROM_EMAIL=${SENDGRID_FROM_EMAIL}
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER}
+    depends_on:
+      - redis
+      - mongo
     networks:
       - internal
 
