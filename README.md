@@ -317,8 +317,8 @@ flowchart LR
 
     subgraph Infra
       JAEGER[Jaeger all-in-one 16686/4318]
-      REDIS[(Redis :6379)]
-      MONGO[(MongoDB :27017)]
+      REDIS[Redis :6379]
+      MONGO[MongoDB :27017]
       OSRM[osrm-service :5000]
     end
 
