@@ -31,6 +31,17 @@ const userSchema = new mongoose.Schema({
     },
 })
 
+// Ensure sensitive/internal fields are never serialized
+function sanitize(ret) {
+    ret.id = ret._id;
+    delete ret._id;
+    delete ret.__v;
+    delete ret.password;
+    return ret;
+}
+userSchema.set('toJSON', { transform: (doc, ret) => sanitize(ret) });
+userSchema.set('toObject', { transform: (doc, ret) => sanitize(ret) });
+
 userSchema.methods.generateAuthToken = function () {
     const token = jwt.sign({ _id: this._id }, process.env.JWT_SECRET, { expiresIn: '24h' });
     return token;

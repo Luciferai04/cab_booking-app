@@ -1,6 +1,6 @@
 const captainModel = require('../models/captain.model');
 const captainService = require('../services/captain.service');
-const blackListTokenModel = require('../models/blackListToken.model');
+const blackListTokenModel = require('../models/blacklistToken.model');
 const { validationResult } = require('express-validator');
 
 
@@ -61,7 +61,12 @@ module.exports.loginCaptain = async (req, res, next) => {
 
     const token = captain.generateAuthToken();
 
-    res.cookie('token', token);
+    res.cookie('token', token, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 24 * 60 * 60 * 1000
+    });
 
     res.status(200).json({ token, captain });
 }

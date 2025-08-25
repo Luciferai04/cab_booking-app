@@ -1,6 +1,34 @@
 {
+  "name": "uber-video",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -k -n backend,frontend -c cyan,magenta \"npm --prefix Backend run dev\" \"npm --prefix frontend run dev\"",
+    "dev:db": "docker compose -f ./docker-compose.yml up -d mongo",
+    "stop:db": "docker compose -f ./docker-compose.yml stop mongo",
+    "test:backend": "npm --prefix Backend test -- --passWithNoTests=false",
+    "prepare": "husky install",
+    "lint": "eslint .",
+    "format": "prettier -w ."
+  },
   "dependencies": {
     "bcrypt": "^5.1.1",
     "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1",
+    "eslint": "^9.9.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-import": "^2.29.1",
+    "eslint-plugin-node": "^11.1.0",
+    "husky": "^9.1.6",
+    "lint-staged": "^15.2.10",
+    "prettier": "^3.3.3"
+  },
+  "lint-staged": {
+    "**/*.{js,jsx,ts,tsx,json,md,yml,yaml}": [
+      "prettier -w",
+      "eslint --max-warnings=0"
+    ]
   }
 }

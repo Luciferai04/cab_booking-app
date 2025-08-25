@@ -1,0 +1,20 @@
+{
+  "name": "routing-service",
+  "version": "1.0.0",
+  "description": "Lightweight routing service providing OSRM-like table endpoint using haversine distances",
+  "main": "server.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+"@opentelemetry/auto-instrumentations-node": "0.53.0",
+"@opentelemetry/exporter-trace-otlp-http": "0.53.0",
+"@opentelemetry/sdk-node": "0.53.0",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "helmet": "^7.1.0",
+    "ioredis": "^5.4.1",
+    "node-fetch": "^3.3.2"
+  }
+}

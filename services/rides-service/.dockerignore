@@ -1,0 +1,17 @@
+# macOS system files
+.DS_Store
+**/.DS_Store
+**/._*
+._*
+
+# Node modules and logs
+node_modules
+**/node_modules
+npm-debug.log*
+yarn-error.log*
+
+# Local env files
+.env
+**/.env
+*.local
+

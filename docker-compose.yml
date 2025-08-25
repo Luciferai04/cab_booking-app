@@ -1,0 +1,347 @@
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: uber-video-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - internal
+
+  maps-service:
+    build:
+      context: ./services/maps-service
+    container_name: uber-video-maps
+    environment:
+      - PORT=4001
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=maps-service
+      - GOOGLE_MAPS_API=dummy-key
+      - USE_MOCK_MAPS=true
+      - ROUTING_BASE_URL=http://routing-service:4010
+      - REDIS_URL=redis://redis:6379
+      - ML_BASE_URL=http://ml-inference-service:8000
+      - SURGE_BASELINE=10
+      - SURGE_MAX_MULT=1.5
+      - SURGE_MIN_MULT=1.0
+      - SURGE_REFRESH_MS=60000
+      - SURGE_PRELOAD_ZONES=zone_2257_8836
+    networks:
+      - internal
+    depends_on:
+      - routing-service
+      - ml-inference-service
+      - redis
+
+  socket-service:
+    build:
+      context: ./services/socket-service
+    container_name: uber-video-socket
+    environment:
+      - PORT=4002
+      - REDIS_URL=redis://redis:6379
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=socket-service
+    depends_on:
+      - redis
+      - jaeger
+    networks:
+      - internal
+
+  redis:
+    image: redis:7-alpine
+    container_name: uber-video-redis
+    networks:
+      - internal
+
+  backend:
+    build:
+      context: .
+      dockerfile: Backend/Dockerfile
+    container_name: uber-video-backend
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DB_CONNECT=${DB_CONNECT:-mongodb://mongo:27017/uber-video?directConnection=true}
+      - JWT_SECRET=${JWT_SECRET}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:5173,http://localhost:8080}
+      - MAPS_BASE_URL=http://maps-service:4001
+      - SOCKET_BASE_URL=http://socket-service:4002
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=backend
+    depends_on:
+      - mongo
+      - maps-service
+      - socket-service
+      - jaeger
+    networks:
+      - internal
+
+  users-service:
+    build:
+      context: ./services/users-service
+    container_name: uber-video-users
+    environment:
+      - PORT=4003
+      - DB_CONNECT=${DB_CONNECT:-mongodb://mongo:27017/uber-video?directConnection=true}
+      - JWT_SECRET=${JWT_SECRET}
+      - REDIS_URL=redis://redis:6379
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=users-service
+    depends_on:
+      - jaeger
+      - redis
+    networks:
+      - internal
+
+  captains-service:
+    build:
+      context: ./services/captains-service
+    container_name: uber-video-captains
+    environment:
+      - PORT=4004
+      - DB_CONNECT=${DB_CONNECT:-mongodb://mongo:27017/uber-video?directConnection=true}
+      - JWT_SECRET=${JWT_SECRET}
+      - REDIS_URL=redis://redis:6379
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=captains-service
+    depends_on:
+      - jaeger
+      - redis
+    networks:
+      - internal
+
+  rides-service:
+    build:
+      context: ./services/rides-service
+    container_name: uber-video-rides
+    environment:
+      - PORT=4005
+      - DB_CONNECT=${DB_CONNECT:-mongodb://mongo:27017/uber-video?directConnection=true}
+      - JWT_SECRET=${JWT_SECRET}
+      - MAPS_BASE_URL=http://maps-service:4001
+      - SOCKET_BASE_URL=http://socket-service:4002
+      - REDIS_URL=redis://redis:6379
+      - ML_BASE_URL=http://ml-inference-service:8000
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=rides-service
+    depends_on:
+      - maps-service
+      - socket-service
+      - redis
+      - mongo
+      - ml-inference-service
+      - jaeger
+    networks:
+      - internal
+
+  dispatcher-worker:
+    build:
+      context: ./services/dispatcher-worker
+    container_name: uber-video-dispatcher-worker
+    restart: unless-stopped
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - DB_CONNECT=mongodb://mongo:27017/uber-video?directConnection=true
+      - SOCKET_BASE_URL=http://socket-service:4002
+      - RIDES_BASE_URL=http://rides-service:4005
+      - OFFER_ACK_SEC=30
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=dispatcher-worker
+    depends_on:
+      - redis
+      - mongo
+      - socket-service
+      - rides-service
+      - jaeger
+    networks:
+      - internal
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.60
+    container_name: uber-video-jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686" # Jaeger UI
+      - "4318:4318"   # OTLP HTTP collector
+    networks:
+      - internal
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: uber-video-prometheus
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - internal
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: uber-video-grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - internal
+
+  loki:
+    image: grafana/loki:2.9.3
+    container_name: uber-video-loki
+    command: ["-config.file=/etc/loki/config.yml"]
+    volumes:
+      - ./observability/loki/loki-config.yml:/etc/loki/config.yml:ro
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - internal
+
+  promtail:
+    image: grafana/promtail:2.9.3
+    container_name: uber-video-promtail
+    command: ["-config.file=/etc/promtail/config.yml"]
+    volumes:
+      - ./observability/loki/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    depends_on:
+      - loki
+    networks:
+      - internal
+
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: uber-video-redis-exporter
+    environment:
+      - REDIS_ADDR=redis:6379
+    ports:
+      - "9121:9121"
+    depends_on:
+      - redis
+    networks:
+      - internal
+
+  caddy:
+    image: caddy:2.8.4-alpine
+    container_name: uber-video-caddy
+    volumes:
+      - ./tls/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "4433:443"   # HTTP/3/QUIC capable (uses TLS/ALPN)
+      - "8083:80"
+    depends_on:
+      - gateway
+    networks:
+      - internal
+
+  gateway:
+    build:
+      context: ./gateway
+    container_name: uber-video-gateway
+    depends_on:
+      - backend
+      - maps-service
+      - socket-service
+      - users-service
+      - captains-service
+      - rides-service
+      - payments-service
+      - routing-service
+    ports:
+      - "8080:80"
+      - "8443:443"
+    volumes:
+      - ./gateway/certs:/etc/nginx/certs:ro
+    networks:
+      - internal
+
+  payments-service:
+    build:
+      context: ./services/payments-service
+    container_name: uber-video-payments
+    environment:
+      - PORT=4006
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=payments-service
+    depends_on:
+      - jaeger
+    networks:
+      - internal
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: uber-video-frontend
+    environment:
+      - VITE_BASE_URL=http://localhost:8080
+      - VITE_GOOGLE_MAPS_API_KEY=dummy-key
+    ports:
+      - "5173:80"
+    depends_on:
+      - gateway
+    networks:
+      - internal
+
+  ml-inference-service:
+    build:
+      context: ./services/ml-inference-service
+    container_name: uber-video-ml
+    environment:
+      - WANDB_API_KEY=${WANDB_API_KEY}
+      - ETA_MODEL_PATH=/models/eta_calibration.joblib
+    volumes:
+      - ./ml/models:/models
+    networks:
+      - internal
+
+  routing-service:
+    build:
+      context: ./services/routing-service
+    container_name: uber-video-routing
+    environment:
+      - PORT=4010
+      - OSRM_BASE_URL=http://osrm-service:5000
+      - REDIS_URL=redis://redis:6379
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=routing-service
+    depends_on:
+      - osrm-service
+      - jaeger
+    networks:
+      - internal
+
+  osrm-service:
+    build:
+      context: ./services/osrm-service
+    container_name: uber-video-osrm
+    platform: linux/amd64
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  mongo_data:
+  grafana_data:
+  caddy_data:
+  caddy_config:
+  loki_data:
+

@@ -1,0 +1,29 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'gateway'
+    static_configs:
+      - targets: ['gateway:80']
+
+  - job_name: 'users-service'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['users-service:4003']
+
+  - job_name: 'captains-service'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['captains-service:4004']
+
+  - job_name: 'rides-service'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['rides-service:4005']
+
+  - job_name: 'redis'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['redis-exporter:9121']
+

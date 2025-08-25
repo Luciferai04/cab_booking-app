@@ -1,0 +1,23 @@
+# Caddy reverse proxy offering HTTP/3 on :4433 and HTTP/1.1/2 on :8083
+# It forwards to the existing Nginx gateway service.
+
+:443, :4433 {
+	encode zstd gzip
+	# For demo, use Caddy's on-demand TLS with local certs
+	tls internal
+	@api {
+		path *
+	}
+	reverse_proxy gateway:443 {
+		transport http {
+			versions h2 h1_1
+			tls_insecure_skip_verify
+		}
+	}
+}
+
+:80, :8083 {
+	encode zstd gzip
+	reverse_proxy gateway:80
+}
+

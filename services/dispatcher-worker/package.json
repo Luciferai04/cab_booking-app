@@ -1,0 +1,16 @@
+{
+  "name": "dispatcher-worker",
+  "version": "1.0.0",
+  "main": "worker.js",
+  "scripts": {
+    "start": "node worker.js"
+  },
+  "dependencies": {
+"@opentelemetry/auto-instrumentations-node": "0.53.0",
+"@opentelemetry/exporter-trace-otlp-http": "0.53.0",
+"@opentelemetry/sdk-node": "0.53.0",
+    "axios": "^1.7.7",
+    "bullmq": "^5.21.6",
+    "mongoose": "^8.8.2"
+  }
+}

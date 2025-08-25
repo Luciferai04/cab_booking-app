@@ -1,0 +1,34 @@
+# macOS
+.DS_Store
+
+# Node
+node_modules/
+**/node_modules/
+
+# Builds and caches
+build/
+dist/
+.cache/
+.tmp/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs/
+*.log
+
+# Env files (keep examples)
+.env
+.env.*
+!*.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Vite output
+frontend/dist/
+
+# Vercel local project files
+.vercel/
