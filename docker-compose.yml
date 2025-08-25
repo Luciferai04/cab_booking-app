@@ -169,6 +169,47 @@ services:
     networks:
       - internal
 
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: uber-video-prometheus
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - internal
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: uber-video-grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - internal
+
+  caddy:
+    image: caddy:2.8.4-alpine
+    container_name: uber-video-caddy
+    volumes:
+      - ./tls/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "4433:443"   # HTTP/3/QUIC capable (uses TLS/ALPN)
+      - "8083:80"
+    depends_on:
+      - gateway
+    networks:
+      - internal
+
   gateway:
     build:
       context: ./gateway
@@ -260,4 +301,7 @@ networks:
 
 volumes:
   mongo_data:
+  grafana_data:
+  caddy_data:
+  caddy_config:
 

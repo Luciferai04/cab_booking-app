@@ -136,6 +136,10 @@ curl -fsS http://localhost:16686/api/services | jq .
 Frontend should load:
 - http://localhost:5173
 
+Prometheus and Grafana (optional):
+- Prometheus: http://localhost:9090 (scrapes users, captains, rides)
+- Grafana: http://localhost:3000 (admin/admin)
+
 Makefile quick checks (optional):
 
 ```
@@ -277,6 +281,10 @@ docker system prune -f
 ## 12) HTTPS and local trust (optional)
 
 If you want trusted HTTPS in browsers without `-k`, use mkcert:
+
+Optional HTTP/3 via Caddy
+- A Caddy reverse proxy is included (ports 4433/8083) to experiment with HTTP/3.
+- It forwards to the existing Nginx gateway; for production, consider a proper TLS setup and domain.
 
 ```
 # Install mkcert (macOS with Homebrew)

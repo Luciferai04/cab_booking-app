@@ -376,7 +376,7 @@ Production Hardening
 - Input Validation: centralize schema validation with Joi/Zod; standardize 4xx/5xx responses.
 
 Observability & SRE
-- Metrics: add a Prometheus + Grafana stack; instrument key business metrics (rides created, acceptance rate, ETA error, payment success rate).
+- Metrics: add a Prometheus + Grafana stack; instrument key business metrics (rides created, acceptance rate, ETA error, payment success rate). Now included: Prometheus at http://localhost:9090 and Grafana at http://localhost:3000 (admin/admin).
 - Logging: ship structured logs (pino) to a central store (Loki/ELK).
 - Tracing: enrich spans with user/ride IDs, add baggage, propagate correlation IDs across all hops.
 - SLOs & Alerts: define SLOs (availability/latency) and set alerting via Alertmanager.
@@ -388,7 +388,7 @@ Reliability
 
 Security
 - JWT Improvements: rotate secrets, reduce lifetime, add refresh/blacklist lists via Redis with TTL.
-- TLS: use mkcert or dev CA for local trust; enable HTTP/3/QUIC on Nginx for modern clients.
+- TLS: use mkcert or dev CA for local trust; enable HTTP/3/QUIC on Nginx for modern clients (note: enabling HTTP/3 requires a different Nginx build or a reverse proxy like Caddy/Envoy).
 - CSRF/Headers: review cookie flags, CSRF tokens where relevant.
 
 Platform & DX
