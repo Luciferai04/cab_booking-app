@@ -45,6 +45,7 @@ const publishLimiter = rateLimit({ windowMs: 60*1000, max: 600 });
 const MAPS_BASE_URL = process.env.MAPS_BASE_URL || 'http://maps-service:4001';
 const SOCKET_BASE_URL = process.env.SOCKET_BASE_URL || 'http://socket-service:4002';
 const REDIS_URL = process.env.REDIS_URL || '';
+const REQUIRE_BOOKING_OTP = String(process.env.REQUIRE_BOOKING_OTP || 'false').toLowerCase() === 'true';
 const REDIS_CONN = REDIS_URL ? (() => { try { const u = new URL(REDIS_URL); return { connection: { host: u.hostname, port: Number(u.port)||6379, password: u.password || undefined } }; } catch { return { connection: {} }; } })() : { connection: {} };
 let redisPub = null;
 if (REDIS_URL) { redisPub = new Redis(REDIS_URL); }
@@ -135,6 +136,10 @@ async function getSurgeFactor(pickup) {
 function getOtp(num) {
   return String(Math.floor(Math.random() * 10 ** num)).padStart(num, '0');
 }
+
+// Metrics for booking OTP
+const bookingOtpRequests = new client.Counter({ name: 'booking_otp_requests_total', help: 'Total booking OTP requests', labelNames: ['result'] });
+const bookingOtpValidations = new client.Counter({ name: 'booking_otp_validations_total', help: 'Total booking OTP validations', labelNames: ['result'] });
 
 async function connect() {
   await mongoose.connect(process.env.DB_CONNECT);
@@ -409,6 +414,25 @@ app.post('/auto-assign', [
   }
 });
 
+// Request booking OTP prior to ride creation (optional, controlled by REQUIRE_BOOKING_OTP)
+app.post('/booking/otp/request', async (req, res) => {
+  try {
+    if (!REQUIRE_BOOKING_OTP) return res.json({ sent: false, message: 'disabled' });
+    const token = req.cookies.token || (req.headers.authorization || '').split(' ')[1];
+    const decoded = auth(token);
+    if (!redisPub) return res.status(503).json({ message: 'booking OTP unavailable' });
+    const otp = getOtp(6);
+    const k = `booking:otp:${decoded._id}`;
+    await redisPub.setex(k, 300, otp); // 5 minutes
+    req.log?.info?.({ userId: decoded._id, otp }, 'booking OTP generated');
+    bookingOtpRequests.inc({ result: 'ok' });
+    return res.json({ sent: true });
+  } catch (e) {
+    bookingOtpRequests.inc({ result: 'error' });
+    return res.status(500).json({ message: 'failed' });
+  }
+});
+
 app.get('/get-fare', [
   query('pickup').isString().isLength({ min: 3 }),
   query('destination').isString().isLength({ min: 3 })
@@ -443,12 +467,24 @@ async function getIdemKey(req, userId){
 app.post('/create', [
   body('pickup').isString().isLength({ min: 3 }),
   body('destination').isString().isLength({ min: 3 }),
-  body('vehicleType').isIn(['auto','car','moto'])
+  body('vehicleType').isIn(['auto','car','moto']),
+  body('bookingOtp').optional().isString().isLength({ min: 6, max: 6 })
 ], async (req, res) => {
   try {
     const token = req.cookies.token || (req.headers.authorization || '').split(' ')[1];
     const decoded = auth(token);
-    const { pickup, destination, vehicleType } = req.body;
+    const { pickup, destination, vehicleType, bookingOtp } = req.body;
+
+    if (REQUIRE_BOOKING_OTP) {
+      if (!redisPub) return res.status(503).json({ message: 'booking OTP unavailable' });
+      const k = `booking:otp:${decoded._id}`;
+      const stored = await redisPub.get(k);
+      if (!stored) { bookingOtpValidations.inc({ result: 'expired' }); return res.status(401).json({ message: 'booking OTP required' }); }
+      if (stored !== bookingOtp) { bookingOtpValidations.inc({ result: 'invalid' }); return res.status(401).json({ message: 'invalid booking OTP' }); }
+      await redisPub.del(k);
+      bookingOtpValidations.inc({ result: 'ok' });
+    }
+
     // Idempotency check
     const key = await getIdemKey(req, decoded._id);
     if (redisPub) {

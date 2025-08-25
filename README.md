@@ -316,7 +316,7 @@ flowchart LR
     end
 
     subgraph Infra
-      JAEGER[Jaeger all-in-one 16686/4318]
+      JAEGER[Jaeger all-in-one 16686 and 4318]
       REDIS[Redis :6379]
       MONGO[MongoDB :27017]
       OSRM[osrm-service :5000]
@@ -377,7 +377,7 @@ sequenceDiagram
     participant PAY as payments-service
     participant REDIS as Redis
     participant MONGO as MongoDB
-    participant J as Jaeger (OTLP)
+    participant J as Jaeger OTLP
 
     Client->>GW: GET /health
     GW-->>Client: 200 ok

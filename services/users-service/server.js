@@ -10,7 +10,7 @@ const bcrypt = require('bcrypt');
 const rateLimit = require('express-rate-limit');
 const pinoHttp = require('pino-http');
 const client = require('prom-client');
-const { randomUUID } = require('crypto');
+const { randomUUID, randomInt } = require('crypto');
 const Redis = require('ioredis');
 
 const app = express();
@@ -161,6 +161,92 @@ app.get('/logout', async (req, res) => {
   res.clearCookie('token');
   res.clearCookie('refreshToken');
   return res.json({ message: 'Logged out' });
+});
+
+// OTP helpers and endpoints
+function maskEmail(email) { const [u, d] = email.split('@'); return `${u[0]}***@${d}`; }
+function maskPhone(phone) { return phone ? phone.replace(/.(?=.{4})/g, '*') : ''; }
+function makeOtp() { return String(randomInt(100000, 1000000)); }
+
+// Metrics for OTP
+const otpRequests = new client.Counter({ name: 'otp_requests_total', help: 'Total OTP requests', labelNames: ['channel','result'] });
+const otpVerifications = new client.Counter({ name: 'otp_verifications_total', help: 'Total OTP verifications', labelNames: ['result'] });
+
+// Request OTP for login/2FA
+app.post('/otp/request', authLimiter, [
+  body('email').optional().isEmail(),
+  body('phone').optional().isString().isLength({ min: 8, max: 20 }),
+  body('purpose').optional().isIn(['login','2fa'])
+], async (req, res) => {
+  try {
+    if (!redis) return res.status(503).json({ message: 'OTP unavailable' });
+    const { email, phone } = req.body;
+    const ident = email || phone;
+    const channel = email ? 'email' : 'sms';
+    if (!ident) { otpRequests.inc({ channel: 'unknown', result: 'bad_request' }); return res.status(400).json({ message: 'email or phone required' }); }
+
+    // rate limit per identifier
+    const rlKey = `otp:rl:${ident}`;
+    const count = await redis.incr(rlKey);
+    if (count === 1) await redis.expire(rlKey, 60); // window 60s
+    if (count > 3) { otpRequests.inc({ channel, result: 'rate_limited' }); return res.status(429).json({ message: 'Too many requests' }); }
+
+    const otp = makeOtp();
+    const key = `otp:users:${ident}`;
+    await redis.setex(key, 300, otp); // 5 minutes TTL
+
+    // In production, call notification-service here
+    // For now, log to server (and optionally return masked destination)
+    req.log?.info?.({ ident, otp }, 'OTP generated');
+
+    otpRequests.inc({ channel, result: 'ok' });
+    return res.json({ sent: true, channel, to: email ? maskEmail(email) : maskPhone(phone) });
+  } catch (e) {
+    otpRequests.inc({ channel: 'unknown', result: 'error' });
+    return res.status(500).json({ message: 'failed' });
+  }
+});
+
+// Verify OTP and issue token
+app.post('/otp/verify', authLimiter, [
+  body('email').optional().isEmail(),
+  body('phone').optional().isString().isLength({ min: 8, max: 20 }),
+  body('otp').isString().isLength({ min: 6, max: 6 })
+], async (req, res) => {
+  try {
+    if (!redis) return res.status(503).json({ message: 'OTP unavailable' });
+    const { email, phone, otp } = req.body;
+    const ident = email || phone;
+    if (!ident) { otpVerifications.inc({ result: 'bad_request' }); return res.status(400).json({ message: 'email or phone required' }); }
+
+    // attempts guard
+    const attemptsKey = `otp:attempts:${ident}`;
+    const attempts = await redis.incr(attemptsKey);
+    if (attempts === 1) await redis.expire(attemptsKey, 600); // 10m window
+    if (attempts > 5) { otpVerifications.inc({ result: 'blocked' }); return res.status(429).json({ message: 'Too many attempts, try later' }); }
+
+    const key = `otp:users:${ident}`;
+    const stored = await redis.get(key);
+    if (!stored) { otpVerifications.inc({ result: 'expired' }); return res.status(400).json({ message: 'OTP expired or not found' }); }
+    if (stored !== otp) { otpVerifications.inc({ result: 'invalid' }); return res.status(401).json({ message: 'Invalid OTP' }); }
+
+    // one-time use
+    await redis.del(key);
+
+    // login existing user by email (preferred) or reject if not found
+    let user = null;
+    if (email) user = await User.findOne({ email });
+    // For phone-based flows, extend schema in future
+    if (!user) { otpVerifications.inc({ result: 'no_user' }); return res.status(404).json({ message: 'User not found, please register' }); }
+
+    const token = genToken(user._id);
+    res.cookie('token', token, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 86400000 });
+    otpVerifications.inc({ result: 'ok' });
+    return res.json({ token, user: user.toJSON() });
+  } catch (e) {
+    otpVerifications.inc({ result: 'error' });
+    return res.status(500).json({ message: 'failed' });
+  }
 });
 
 const port = process.env.PORT || 4003;
