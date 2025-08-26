@@ -651,12 +651,14 @@ New: Staging smoke test workflow
 - A GitHub Actions workflow is included to run a production-oriented smoke test against a staging URL using scripts/smoke-prod.sh.
 - Trigger manually via "Run workflow" in GitHub or automatically after deployments.
 - Configure BASE_URL via workflow input or repository/environment variable.
+- Slack notifications: smoke job posts its status to Slack via secrets.SLACK_WEBHOOK.
 
-Local gateway configs (dev vs prod)
+Local gateway configs (dev vs prod vs staging)
 - Default gateway build now uses production config (HTTPS-only, 80→443 redirect).
 - Switch quickly using Make targets:
-  - make gateway-use-prod (HTTPS-only)
-  - make gateway-use-dev (dev config from gateway/nginx.conf)
+  - make gateway-use-prod (HTTPS-only; gateway/nginx.prod.conf)
+  - make gateway-use-dev (HTTP + HTTPS; gateway/nginx.conf)
+  - make gateway-use-staging (strict TLS/ciphers/OCSP; gateway/nginx.staging.conf)
 - Production smoke locally:
   - make smoke-prod
 
@@ -667,8 +669,9 @@ The repository includes GitHub Actions workflows:
 - Unit and integration tests
 - Docker image builds
 - Kubernetes deployment
-- Post-deploy staging smoke tests (scripts/smoke-prod.sh)
+- Post-deploy staging smoke tests (scripts/smoke-prod.sh) with Slack notify
   - Configure BASE_URL via repository Variable/Secret STAGING_BASE_URL (e.g., https://staging.cab-booking.com)
+  - Configure Slack via secrets.SLACK_WEBHOOK
 - Performance testing
 - Rollback on failure
 

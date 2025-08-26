@@ -172,6 +172,14 @@ gateway-use-prod: gateway-build-prod
 gateway-use-dev: gateway-build-dev
 	@echo "Gateway now using development config"
 
+gateway-build-staging:
+	@echo "Building gateway with staging nginx.conf (strict TLS) ..."
+	@$(COMPOSE) build --build-arg NGINX_CONF=nginx.staging.conf gateway
+	@$(COMPOSE) up -d gateway
+
+gateway-use-staging: gateway-build-staging
+	@echo "Gateway now using staging config"
+
 smoke-prod:
 	@bash ./scripts/smoke-prod.sh
 
