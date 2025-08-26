@@ -667,6 +667,8 @@ The repository includes GitHub Actions workflows:
 - Unit and integration tests
 - Docker image builds
 - Kubernetes deployment
+- Post-deploy staging smoke tests (scripts/smoke-prod.sh)
+  - Configure BASE_URL via repository Variable/Secret STAGING_BASE_URL (e.g., https://staging.cab-booking.com)
 - Performance testing
 - Rollback on failure
 
