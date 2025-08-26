@@ -1,0 +1,36 @@
+name: Staging Smoke Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Base URL of staging API (e.g., https://staging.example.com)"
+        required: false
+        default: "https://staging.example.com"
+  push:
+    branches: [ main ]
+    paths:
+      - 'scripts/smoke-prod.sh'
+      - '.github/workflows/staging-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run staging smoke
+        env:
+          BASE_URL: ${{ inputs.base_url || vars.STAGING_BASE_URL || secrets.STAGING_BASE_URL }}
+          CURL: "curl -sS"
+        run: |
+          if [ -z "$BASE_URL" ]; then
+            echo "BASE_URL is not set. Provide via workflow input, repository variable STAGING_BASE_URL, or secret STAGING_BASE_URL." >&2
+            exit 1
+          fi
+          bash ./scripts/smoke-prod.sh
+

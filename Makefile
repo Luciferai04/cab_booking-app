@@ -161,6 +161,17 @@ gateway-build-prod:
 	@$(COMPOSE) build --build-arg NGINX_CONF=nginx.prod.conf gateway
 	@$(COMPOSE) up -d gateway
 
+gateway-build-dev:
+	@echo "Building gateway with development nginx.conf (HTTP + HTTPS)..."
+	@$(COMPOSE) build --build-arg NGINX_CONF=nginx.conf gateway
+	@$(COMPOSE) up -d gateway
+
+gateway-use-prod: gateway-build-prod
+	@echo "Gateway now using production config"
+
+gateway-use-dev: gateway-build-dev
+	@echo "Gateway now using development config"
+
 smoke-prod:
 	@bash ./scripts/smoke-prod.sh
 

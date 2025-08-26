@@ -647,6 +647,19 @@ vercel --prod
 
 ### CI/CD Pipeline
 
+New: Staging smoke test workflow
+- A GitHub Actions workflow is included to run a production-oriented smoke test against a staging URL using scripts/smoke-prod.sh.
+- Trigger manually via "Run workflow" in GitHub or automatically after deployments.
+- Configure BASE_URL via workflow input or repository/environment variable.
+
+Local gateway configs (dev vs prod)
+- Default gateway build now uses production config (HTTPS-only, 80→443 redirect).
+- Switch quickly using Make targets:
+  - make gateway-use-prod (HTTPS-only)
+  - make gateway-use-dev (dev config from gateway/nginx.conf)
+- Production smoke locally:
+  - make smoke-prod
+
 The repository includes GitHub Actions workflows:
 
 **Production Deploy Pipeline** (`.github/workflows/production-deploy.yml`):
