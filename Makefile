@@ -156,6 +156,14 @@ stack-down:
 gateway-restart:
 	@$(COMPOSE) up -d --force-recreate gateway
 
+gateway-build-prod:
+	@echo "Building gateway with production nginx.conf (HTTPS-only)..."
+	@$(COMPOSE) build --build-arg NGINX_CONF=nginx.prod.conf gateway
+	@$(COMPOSE) up -d gateway
+
+smoke-prod:
+	@bash ./scripts/smoke-prod.sh
+
 smoke:
 	@echo "HTTP health:" && curl -fsS http://localhost:8080/health && echo
 	@echo "HTTPS health:" && curl -skf https://localhost:8443/health && echo

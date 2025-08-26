@@ -89,6 +89,9 @@ services:
       - REDIS_URL=redis://redis:6379
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
       - OTEL_SERVICE_NAME=users-service
+      - NOTIFICATION_BASE_URL=http://notification-service:4008
+      - NOTIFICATION_API_TOKEN=${NOTIFICATION_API_TOKEN}
+      - OTP_PEPPER=${OTP_PEPPER}
     depends_on:
       - jaeger
       - redis
@@ -127,6 +130,7 @@ services:
       - REQUIRE_BOOKING_OTP=true
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
       - OTEL_SERVICE_NAME=rides-service
+      - OTP_PEPPER=${OTP_PEPPER}
     depends_on:
       - maps-service
       - socket-service
@@ -316,6 +320,7 @@ services:
       - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
       - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
       - TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER}
+      - NOTIFICATION_API_TOKEN=${NOTIFICATION_API_TOKEN}
     depends_on:
       - redis
       - mongo

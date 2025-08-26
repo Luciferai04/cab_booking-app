@@ -422,8 +422,10 @@ app.post('/booking/otp/request', async (req, res) => {
     const decoded = auth(token);
     if (!redisPub) return res.status(503).json({ message: 'booking OTP unavailable' });
     const otp = getOtp(6);
+    const pepper = process.env.OTP_PEPPER || '';
+    const hashed = createHash('sha256').update(otp + pepper).digest('hex');
     const k = `booking:otp:${decoded._id}`;
-    await redisPub.setex(k, 300, otp); // 5 minutes
+    await redisPub.setex(k, 300, hashed); // 5 minutes (hashed)
     req.log?.info?.({ userId: decoded._id, otp }, 'booking OTP generated');
     bookingOtpRequests.inc({ result: 'ok' });
     const payload = { sent: true };
@@ -482,7 +484,8 @@ app.post('/create', [
       const k = `booking:otp:${decoded._id}`;
       const stored = await redisPub.get(k);
       if (!stored) { bookingOtpValidations.inc({ result: 'expired' }); return res.status(401).json({ message: 'booking OTP required' }); }
-      if (stored !== bookingOtp) { bookingOtpValidations.inc({ result: 'invalid' }); return res.status(401).json({ message: 'invalid booking OTP' }); }
+      const candidate = createHash('sha256').update(String(bookingOtp) + (process.env.OTP_PEPPER || '')).digest('hex');
+      if (stored !== candidate) { bookingOtpValidations.inc({ result: 'invalid' }); return res.status(401).json({ message: 'invalid booking OTP' }); }
       await redisPub.del(k);
       bookingOtpValidations.inc({ result: 'ok' });
     }

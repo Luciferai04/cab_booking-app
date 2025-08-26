@@ -776,6 +776,11 @@ const notificationService = new NotificationService();
 // Ad-hoc OTP sender for email or SMS
 app.post('/send-otp', async (req, res) => {
   try {
+    const expected = process.env.NOTIFICATION_API_TOKEN || '';
+    const authz = req.headers['authorization'] || '';
+    if (expected && (!authz.startsWith('Bearer ') || authz.slice(7) !== expected)) {
+      return res.status(401).json({ message: 'unauthorized' });
+    }
     const { toEmail, toPhone, otp, purpose = 'verification' } = req.body || {};
     if (!otp || (!toEmail && !toPhone)) return res.status(400).json({ message: 'otp and toEmail/toPhone required' });
 

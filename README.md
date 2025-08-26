@@ -567,6 +567,10 @@ FIREBASE_SERVICE_ACCOUNT=your-firebase-credentials.json
 # Security
 CORS_ORIGIN=https://yourdomain.com,https://app.yourdomain.com
 ENVIRONMENT=production
+
+# OTP security (recommended)
+OTP_PEPPER=your-otp-pepper
+NOTIFICATION_API_TOKEN=your-strong-bearer-token
 ```
 
 ### Kubernetes Deployment

@@ -10,7 +10,7 @@ const bcrypt = require('bcrypt');
 const rateLimit = require('express-rate-limit');
 const pinoHttp = require('pino-http');
 const client = require('prom-client');
-const { randomUUID, randomInt } = require('crypto');
+const { randomUUID, randomInt, createHash } = require('crypto');
 const Redis = require('ioredis');
 const axios = require('axios');
 
@@ -195,14 +195,17 @@ app.post('/otp/request', authLimiter, [
 
     const otp = makeOtp();
     const key = `otp:users:${ident}`;
-    await redis.setex(key, 300, otp); // 5 minutes TTL
+    const pepper = process.env.OTP_PEPPER || '';
+    const hashed = createHash('sha256').update(otp + pepper).digest('hex');
+    await redis.setex(key, 300, hashed); // 5 minutes TTL (hashed)
 
     // Try to send via notification-service (best-effort)
     try {
+      const headers = process.env.NOTIFICATION_API_TOKEN ? { Authorization: `Bearer ${process.env.NOTIFICATION_API_TOKEN}` } : undefined;
       if (email) {
-        await axios.post(`${NOTIFICATION_BASE_URL}/send-otp`, { toEmail: email, otp, purpose: 'login' }, { timeout: 2000 });
+        await axios.post(`${NOTIFICATION_BASE_URL}/send-otp`, { toEmail: email, otp, purpose: 'login' }, { timeout: 2000, headers });
       } else if (phone) {
-        await axios.post(`${NOTIFICATION_BASE_URL}/send-otp`, { toPhone: phone, otp, purpose: 'login' }, { timeout: 2000 });
+        await axios.post(`${NOTIFICATION_BASE_URL}/send-otp`, { toPhone: phone, otp, purpose: 'login' }, { timeout: 2000, headers });
       }
     } catch (_) {
       // ignore delivery errors in request endpoint
@@ -242,7 +245,8 @@ app.post('/otp/verify', authLimiter, [
     const key = `otp:users:${ident}`;
     const stored = await redis.get(key);
     if (!stored) { otpVerifications.inc({ result: 'expired' }); return res.status(400).json({ message: 'OTP expired or not found' }); }
-    if (stored !== otp) { otpVerifications.inc({ result: 'invalid' }); return res.status(401).json({ message: 'Invalid OTP' }); }
+    const candidate = createHash('sha256').update(otp + (process.env.OTP_PEPPER || '')).digest('hex');
+    if (stored !== candidate) { otpVerifications.inc({ result: 'invalid' }); return res.status(401).json({ message: 'Invalid OTP' }); }
 
     // one-time use
     await redis.del(key);
